@@ -3,7 +3,6 @@ package com.example.batchprocessing;
 import javax.sql.DataSource;
 
 import org.springframework.batch.core.Job;
-import org.springframework.batch.core.JobExecutionListener;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
@@ -13,15 +12,15 @@ import org.springframework.batch.item.database.BeanPropertyItemSqlParameterSourc
 import org.springframework.batch.item.database.JdbcBatchItemWriter;
 import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
 import org.springframework.batch.item.file.FlatFileItemReader;
+import org.springframework.batch.item.file.MultiResourceItemReader;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
 import org.springframework.batch.item.file.mapping.BeanWrapperFieldSetMapper;
-import org.springframework.batch.item.file.mapping.DefaultLineMapper;
-import org.springframework.batch.item.file.transform.DelimitedLineTokenizer;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.core.io.Resource;
 
 // tag::setup[]
 @Configuration
@@ -33,6 +32,13 @@ public class BatchConfiguration {
 
 	@Autowired
 	public StepBuilderFactory stepBuilderFactory;
+
+
+
+
+	@Value("file:C:\\Users\\aqannam\\IdeaProjects\\gs-batch-processing\\complete\\src\\main\\resources\\flatFiles\\sample-data*.csv")
+	private Resource[] inputResources;
+
 	// end::setup[]
 
 	// tag::readerwriterprocessor[]
@@ -40,7 +46,7 @@ public class BatchConfiguration {
 	public FlatFileItemReader<Person> reader() {
 		return new FlatFileItemReaderBuilder<Person>()
 			.name("personItemReader")
-			.resource(new ClassPathResource("sample-data.csv"))
+			.resource(new ClassPathResource("flatFiles/sample-data1.csv"))
 			.delimited()
 			.names(new String[]{"firstName", "lastName"})
 			.fieldSetMapper(new BeanWrapperFieldSetMapper<Person>() {{
@@ -71,8 +77,18 @@ public class BatchConfiguration {
 			.incrementer(new RunIdIncrementer())
 			.listener(listener)
 			.flow(step1)
+			.next(step2())
 			.end()
 			.build();
+	}
+
+	@Bean
+	public MultiResourceItemReader<Person> multiResourceItemReader()
+	{
+		MultiResourceItemReader<Person> resourceItemReader = new MultiResourceItemReader<Person>();
+		resourceItemReader.setResources(inputResources);
+		resourceItemReader.setDelegate(reader());
+		return resourceItemReader;
 	}
 
 	@Bean
@@ -83,6 +99,22 @@ public class BatchConfiguration {
 			.processor(processor())
 			.writer(writer)
 			.build();
+	}
+
+
+	@Bean
+	public Step step2() {
+		FileDeletingTasklet task = new FileDeletingTasklet();
+		task.setResources(inputResources);
+		return stepBuilderFactory.get("step3")
+				.tasklet(task)
+				.build();
+	}
+
+	@Bean
+	public ConsoleItemWriter<Person> writer()
+	{
+		return new ConsoleItemWriter<Person>();
 	}
 	// end::jobstep[]
 }
